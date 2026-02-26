@@ -45,7 +45,7 @@ def parse_args():
                         help='Checkpoint para continuar treinamento')
     parser.add_argument('--project_name', type=str, default='addnet-deepfake',
                         help='Nome do projeto no Comet')
-    parser.add_argument('--api_key', type=str, default='***REMOVED***',
+    parser.add_argument('--api_key', type=str, default=None,
                         help='API key do Comet (ou use COMET_API_KEY env var)')
     parser.add_argument('--offline', action='store_true',
                         help='Rodar em modo offline (sem API key)')

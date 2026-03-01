@@ -18,15 +18,15 @@ class Filter(ABC):
 
 class BandPassFilter(Filter):
     def __init__(self, raio_int: int, raio_ext: int, rows: int, cols: int):
-        self.raio_int = raio_int if raio_int is not None else 0
-        self.raio_ext = raio_ext if raio_ext is not None else rows
+        self.raio_int = raio_int 
+        self.raio_ext = raio_ext 
         self.rows = rows
         self.cols = cols
         center = (cols // 2, rows // 2)
         y, x = np.ogrid[:rows, :cols]
         distance = np.sqrt((x - center[0])**2 + (y - center[1])**2)
-        D0 = (raio_ext + raio_int) / 2  
-        W = raio_ext - raio_int         
+        D0 = (self.raio_ext + self.raio_int) / 2  
+        W = self.raio_ext - self.raio_int         
         
         numerador = distance * W
         denominador = distance**2 - D0**2
@@ -37,14 +37,37 @@ class BandPassFilter(Filter):
         ratio = np.zeros_like(distance)
         ratio[valid_mask] = numerador[valid_mask] / denominador[valid_mask]
         
-        if raio_int == 0:
-            mask = np.exp(-(distance**2)/ (2*(raio_ext**2)))
+        if self.raio_int == 0:
+            mask = np.exp(-(distance**2)/ (2*(self.raio_ext**2)))
         else:
-            mask = np.exp(-(distance**2)/ (2*(raio_ext**2))) * (1 - np.exp(-(distance**2)/ (2*(raio_int**2))))
+            mask = np.exp(-(distance**2)/ (2*(self.raio_ext**2))) * (1 - np.exp(-(distance**2)/ (2*(self.raio_int**2))))
         
         self.mask = mask
-        if raio_int != 0:
+        if self.raio_int != 0:
             self.mask[self.rows//2, self.cols//2] = 0
+
+class LowPassFilter(Filter):
+    def __init__(self, raio: int, rows: int, cols: int):
+        self.raio = raio
+        self.rows = rows
+        self.cols = cols
+        center = (cols // 2, rows // 2)
+        y, x = np.ogrid[:rows, :cols]
+        distance = np.sqrt((x - center[0])**2 + (y - center[1])**2)
+        mask = np.exp(-(distance**2) / (2 * (self.raio**2)))
+        self.mask = mask
+
+class HighPassFilter(Filter):
+    def __init__(self, raio: int, rows: int, cols: int):
+        self.raio = raio
+        self.rows = rows
+        self.cols = cols
+        center = (cols // 2, rows // 2)
+        y, x = np.ogrid[:rows, :cols]
+        distance = np.sqrt((x - center[0])**2 + (y - center[1])**2)
+        mask = 1 - np.exp(-(distance**2) / (2 * (self.raio**2)))
+        self.mask = mask
+        self.mask[self.rows//2, self.cols//2] = 0
 
 class FreqManager:
     def __init__(self, path: str = None, filter=None):
@@ -54,9 +77,14 @@ class FreqManager:
     def set_path(self, path: str):
         self.path = path
 
-    def set_filter(self, raio: int, raio_ext: int = None, rows: int = 0, cols: int = 0):
+    def set_filter(self, raio: int, raio_ext: int = None, rows: int = 0, cols: int = 0, type: str = "faixa"):
         # Aqui instanciamos a sua classe de filtro Gaussiano
-        self.filter = BandPassFilter(raio_int=raio, raio_ext=raio_ext, rows=rows, cols=cols)
+        if type == "faixa":
+            self.filter = BandPassFilter(raio_int=raio, raio_ext=raio_ext, rows=rows, cols=cols)
+        elif type == "passa_alta":
+            self.filter = HighPassFilter(raio=raio, rows=rows, cols=cols)
+        elif type == "passa_baixa":
+            self.filter = LowPassFilter(raio=raio, rows=rows, cols=cols)
 
     def transform_img(self):
         # Assumindo que load_image usa cv2.imread internamente (retorna BGR uint8)
@@ -74,7 +102,7 @@ class FreqManager:
     def apply_filter(self, type: str, raio: int, raio_ext: int = None):
         image, (rows, cols) = self.transform_img()
 
-        self.set_filter(raio=raio, raio_ext=raio_ext, rows=rows, cols=cols)
+        self.set_filter(raio=raio, raio_ext=raio_ext, rows=rows, cols=cols, type=type)
         
         # Prepara a máscara para 2 canais (Real e Imaginário do OpenCV)
         mask = self.filter.mask.astype(np.float32)
@@ -105,9 +133,15 @@ class FreqManager:
         hsv_filtered = cv2.merge((h, s, v_final))
         img_final_bgr = cv2.cvtColor(hsv_filtered, cv2.COLOR_HSV2BGR)
 
-        image_original = image[50:-50, 50:-50]
         img_final_bgr = img_final_bgr[50:-50, 50:-50]
-        path_fold = f'data/{self.path.split("/")[-3]}/{self.path.split("/")[-2]}/{type}/{(str(self.filter.raio_int )+ "_") if self.filter.raio_int != 0 or type == "faixa" else ""}{self.filter.raio_ext if self.filter.raio_ext != 0 or type == "faixa" else ""}'
+        if type == "faixa":
+            path_final = f'{self.filter.raio_int}_{self.filter.raio_ext}'
+        elif type == "passa_alta":
+            path_final = f'{self.filter.raio}'
+        elif type == "passa_baixa":
+            path_final = f'{self.filter.raio}'
+            
+        path_fold = f'data/{type}/{path_final}/{self.path.split("/")[-3]}/{self.path.split("/")[-2]}'
         if not os.path.exists(path_fold):
             os.makedirs(path_fold)
 
@@ -131,11 +165,11 @@ if __name__ == "__main__":
                 raio = raio_par[0]
                 raio_ext = raio_par[1]
             elif typ == "passa_alta":
-                raio = raio_par[0]
+                raio = raio_par[1]
                 raio_ext = None
             elif typ == "passa_baixa":
-                raio = None
-                raio_ext = raio_par[1]
+                raio = raio_par[1]
+                raio_ext = None
 
             for img in os.listdir(args.path):
                 if img.endswith(".png"):

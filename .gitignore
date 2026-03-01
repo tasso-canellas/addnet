@@ -1,3 +1,7 @@
 data
 nohup.out
 __pycache__
+.env
+.vscode
+run_all.sh
+logs

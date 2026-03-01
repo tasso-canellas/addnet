@@ -7,13 +7,13 @@ import argparse
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from datetime import datetime
 from tqdm import tqdm
 import numpy as np
 from sklearn.metrics import confusion_matrix, classification_report, accuracy_score
-import comet_ml
 from comet_ml import Experiment, OfflineExperiment
+import dotenv 
 
+dotenv.load_dotenv()  # Carrega variáveis de ambiente do .env
 from addnet import ADDNet2D_Xception
 from dataset import get_dataloaders
 
@@ -45,7 +45,9 @@ def parse_args():
                         help='Checkpoint para continuar treinamento')
     parser.add_argument('--project_name', type=str, default='addnet-deepfake',
                         help='Nome do projeto no Comet')
-    parser.add_argument('--api_key', type=str, default=None,
+    parser.add_argument('--experiment_name', type=str, default=None,
+                        help='Nome do experimento no Comet')
+    parser.add_argument('--api_key', type=str, default=os.getenv("API_KEY"),
                         help='API key do Comet (ou use COMET_API_KEY env var)')
     parser.add_argument('--offline', action='store_true',
                         help='Rodar em modo offline (sem API key)')
@@ -159,7 +161,10 @@ def main():
             auto_param_logging=True,
             log_code=True,
         )
-    
+
+    if args.experiment_name:
+        experiment.set_name(args.experiment_name)
+
     # Log hyperparameters
     experiment.log_parameters({
         "batch_size": args.batch_size,
